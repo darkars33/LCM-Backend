@@ -12,12 +12,45 @@ const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 
 
-
+require('dotenv').config()
 
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+
+const stripe = require("stripe")(process.env.STRIPE_PRIVATE_KEY)
+
+app.post("/checkout" , async(req,res)=> {
+    try{
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ["card"],
+            mode: "payment",
+            line_items: req.body.items.map(item=> {
+                return {
+                    price_data: {
+                        currency:"inr",
+                        product_data: {
+                            name:item.name
+                        },
+                        unit_amount: (item.price)*100,
+                    },
+                    quantity:item.quantity
+                }
+            }),
+            success_url: "http://localhost:5173/success",
+            cancel_url:"http://localhost:5173/cancel"
+        })
+
+        res.json({url:session.url})
+
+    } catch (error)
+    {
+        res.status(500).json({error:error.message})
+
+    }
+})
+
 
 // Routes
 // Define your routes here
@@ -41,10 +74,13 @@ cloudinary.config({
     api_secret: "jRSyIYt8-fwIUz23Pcg6aDnOnPQ",
   });
 
+  app.get("/", (req, res) => {
+          res.send("Hello World!");
+  })
 
 app.post('/signupbuyer', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password,shopLocation} = req.body;
 
         // Check if user already exists
         const existingUser = await BuyerModel.findOne({ username });
@@ -56,10 +92,10 @@ app.post('/signupbuyer', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Create a new user
-        const newUser = new BuyerModel({ username, password: hashedPassword });
+        const newUser = new BuyerModel({ username, password: hashedPassword,shopLocation});
         await newUser.save();
 
-        res.status(201).json({ message: 'User created successfully' });
+        res.status(201).json({ message: 'User created successfully'});
     } catch (error) {
         console.error('Error signing up:', error);
         res.status(500).json({ message: 'Error signing up' });
@@ -83,8 +119,8 @@ app.post('/loginbuyer', async (req, res) => {
         }
 
         // Create and return JWT token
-        const token = jwt.sign({ id:user._id }, 'your-secret-key', { expiresIn: '1h' });
-        res.status(200).json({ token,  userID:user._id});
+        const token = jwt.sign({ id:user._id, type: 'buyer' }, 'your-secret-key', { expiresIn: '1h' });
+        res.status(200).json({ token, userID: user._id, username, userType: 'buyer' });
     } catch (error) {
         console.error('Error logging in:', error);
         res.status(500).json({ message: 'Error logging in' });
@@ -93,7 +129,7 @@ app.post('/loginbuyer', async (req, res) => {
 
 app.post('/signupseller', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password,shopLocation } = req.body;
 
         // Check if user already exists
         const existingUser = await SellerModel.findOne({ username });
@@ -105,7 +141,7 @@ app.post('/signupseller', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Create a new user
-        const newUser = new SellerModel({ username, password: hashedPassword });
+        const newUser = new SellerModel({ username, password: hashedPassword ,shopLocation});
         await newUser.save();
 
         res.status(201).json({ message: 'User created successfully' });
@@ -132,8 +168,8 @@ app.post('/loginseller', async (req, res) => {
         }
 
         // Create and return JWT token
-        const token = jwt.sign({ id:user._id }, 'your-secret-key', { expiresIn: '1h' });
-        res.status(200).json({ token,  userID:user._id});
+        const token = jwt.sign({ id: user._id, type: 'seller' }, 'your-secret-key', { expiresIn: '1h' });
+        res.status(200).json({ token, userID: user._id, userType: 'seller' });
     } catch (error) {
         console.error('Error logging in:', error);
         res.status(500).json({ message: 'Error logging in' });
