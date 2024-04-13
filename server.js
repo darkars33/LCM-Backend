@@ -198,6 +198,15 @@ app.get('/products', async (req, res) => {
     }
   });
 
+  app.get('/products/:id', async (req, res) => {
+     try {
+       const product = await Product.findById(req.params.id);
+       res.json(product);
+     } catch (error) {
+         res.status(500).json({ message: error.message });
+     }
+  });
+
 
 
 app.post("/upload", upload.single("image"), async (req, res) => {
